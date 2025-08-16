@@ -1,6 +1,6 @@
 import io
 import os
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -21,12 +21,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-restorer = KontextRestorer(
-    model_id=os.getenv("KONTEXT_MODEL_ID", "black-forest-labs/FLUX.1-Kontext-dev")
-)
+@app.on_event("startup")
+def startup_event():
+    # Instantiate once per process at startup
+    app.state.restorer = KontextRestorer(
+        model_id=os.getenv("KONTEXT_MODEL_ID", "black-forest-labs/FLUX.1-Kontext-dev")
+    )
 
 @app.post("/restore")
 async def restore_photo(
+    request: Request,
     file: UploadFile = File(...),
     user_prompt: str = Form(""),
     guidance_scale: float = Form(3.5),
@@ -36,7 +40,7 @@ async def restore_photo(
     seed: int = Form(None),
 ):
     img = Image.open(io.BytesIO(await file.read()))
-    result_img = restorer.restore(
+    result_img = request.app.state.restorer.restore(
         img,
         user_prompt=user_prompt,
         guidance_scale=guidance_scale,
