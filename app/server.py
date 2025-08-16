@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+import requests
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -151,12 +152,68 @@ def simulate_restore(src_path: Path, dst_path: Path) -> None:
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         im.save(dst_path, quality=95)
 
+def call_remote_api_restore(
+    src_path: Path,
+    dst_path: Path,
+    prompts: Prompts,
+    adv: AdvancedSettings,
+    api_url: str,
+) -> bool:
+    """
+    Call the remote /restore API endpoint.
+    Returns True if successful, False if failed (for fallback).
+    """
+    try:
+        # Prepare the files and data for the POST request
+        with open(src_path, 'rb') as f:
+            files = {'file': (src_path.name, f, 'image/*')}
+            
+            # Map server.py parameters to main.py API format
+            data = {
+                'user_prompt': prompts.positive,  # Use positive prompt as user_prompt
+                'guidance_scale': adv.guidance_scale,
+                'strength': adv.strength,
+                'num_inference_steps': adv.steps,
+                'upscale_factor': 2.0,  # Default value, not configurable in server.py
+                'seed': adv.seed if adv.seed is not None else '',
+            }
+            
+            # Make the API request
+            response = requests.post(
+                f"{api_url.rstrip('/')}/restore",
+                files=files,
+                data=data,
+                timeout=120  # 2 minute timeout for image processing
+            )
+            
+            if response.status_code == 200:
+                # Save the response image to dst_path
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(dst_path, 'wb') as out_f:
+                    out_f.write(response.content)
+                return True
+            else:
+                print(f"Remote API call failed with status {response.status_code}: {response.text}")
+                return False
+                
+    except Exception as e:
+        print(f"Error calling remote API: {e}")
+        return False
+
 def call_model_restore(
     src_path: Path,
     dst_path: Path,
     prompts: Prompts,
     adv: AdvancedSettings,
 ):
+    # Check if RESTORE_API_URL is set and try remote API first
+    restore_api_url = os.getenv("RESTORE_API_URL")
+    if restore_api_url:
+        if call_remote_api_restore(src_path, dst_path, prompts, adv, restore_api_url):
+            return  # Success, we're done
+        print("Remote API call failed, falling back to local model")
+    
+    # Fall back to local model if remote API is not configured or failed
     if not MODEL_AVAILABLE or model_restore_image is None:
         simulate_restore(src_path, dst_path)
         return

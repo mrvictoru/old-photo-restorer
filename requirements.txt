@@ -1,1 +1,1 @@
-FastAPI, uvicorn, jinja2, pillow, aiofiles, python-multipart
+FastAPI, uvicorn, jinja2, pillow, aiofiles, python-multipart, requests
