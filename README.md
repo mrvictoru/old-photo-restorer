@@ -11,6 +11,40 @@ Note: This is also a test to see how well AI agent can complete task and build s
 - Modern upscaling (default 2x).
 - Prompt-based control for restoration style.
 - API endpoint for web UI integration.
+- **Client-server architecture support**: Can use remote restoration API or run standalone.
+
+## Architecture
+
+This project supports two deployment modes:
+
+1. **Standalone Mode**: All-in-one server with UI and restoration model
+2. **Client-Server Mode**: Separate UI server that calls a dedicated restoration API
+
+### Environment Variables
+
+- `RESTORE_API_URL`: (Optional) URL of remote restoration service. If set, the UI server will POST images to `{RESTORE_API_URL}/restore` instead of using local model.
+- `KONTEXT_MODEL_ID`: (Optional) Hugging Face model ID for the restoration model (default: `black-forest-labs/FLUX.1-Kontext-dev`)
+
+### Client-Server Usage
+
+To run the UI server as a client to a remote restoration API:
+
+```bash
+# Set the restoration API URL
+export RESTORE_API_URL="http://your-api-server:8000"
+
+# Run the UI server (will use remote API for restoration)
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8964
+```
+
+To run the dedicated restoration API server:
+
+```bash
+# Run the API-only server  
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+The UI server will automatically fall back to local model or simulation if the remote API is unavailable.
 
 ## Requirements
 
