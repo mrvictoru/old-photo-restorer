@@ -111,7 +111,6 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # ------------------------------------------------------------------------------
 class Prompts(BaseModel):
     positive: str = Field("", description="Positive prompt")
-    negative: str = Field("", description="Negative prompt")
 
 class AdvancedSettings(BaseModel):
     guidance_scale: float = Field(7.5, ge=0, le=50)
@@ -164,6 +163,9 @@ def call_remote_api_restore(
     Returns True if successful, False if failed (for fallback).
     """
     try:
+        # Get timeout from environment variable, default to 120 seconds
+        timeout = int(os.getenv("RESTORE_API_TIMEOUT", "120"))
+        
         # Prepare the files and data for the POST request
         with open(src_path, 'rb') as f:
             files = {'file': (src_path.name, f, 'image/*')}
@@ -175,15 +177,18 @@ def call_remote_api_restore(
                 'strength': adv.strength,
                 'num_inference_steps': adv.steps,
                 'upscale_factor': 2.0,  # Default value, not configurable in server.py
-                'seed': adv.seed if adv.seed is not None else '',
             }
+            
+            # Only include seed if it's set
+            if adv.seed is not None:
+                data['seed'] = adv.seed
             
             # Make the API request
             response = requests.post(
                 f"{api_url.rstrip('/')}/restore",
                 files=files,
                 data=data,
-                timeout=120  # 2 minute timeout for image processing
+                timeout=timeout
             )
             
             if response.status_code == 200:
@@ -223,7 +228,7 @@ def call_model_restore(
         return model_restore_image(
             src_path,
             dst_path,
-            prompts={"positive": prompts.positive, "negative": prompts.negative},
+            prompts={"positive": prompts.positive},
             guidance_scale=adv.guidance_scale,
             steps=adv.steps,
             seed=adv.seed,
@@ -237,7 +242,7 @@ def call_model_restore(
         return model_restore_image(
             src_path,
             dst_path,
-            {"positive": prompts.positive, "negative": prompts.negative},
+            {"positive": prompts.positive},
             {
                 "guidance_scale": adv.guidance_scale,
                 "steps": adv.steps,
@@ -262,7 +267,7 @@ def call_model_restore(
 # ------------------------------------------------------------------------------
 # Routes
 # ------------------------------------------------------------------------------
-@app.get("/", response_class=JSONResponse, include_in_schema=False)
+@app.get("/", include_in_schema=False)
 async def root_redirect(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
@@ -301,7 +306,7 @@ async def upload_image(file: UploadFile = File(...)):
         "thumb_url": f"/data/thumbs/{thumb_path.name}" if thumb_path.exists() else None,
         "status": "idle",
         "error": None,
-        "prompts": {"positive": "", "negative": ""},
+        "prompts": {"positive": ""},
         "advanced": AdvancedSettings().model_dump(),
     }
     store.add(item)
