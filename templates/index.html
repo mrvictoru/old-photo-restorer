@@ -1,1 +1,101 @@
-UI HTML
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Old Photo Restorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="/static/css/styles.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <!-- Left sidebar: history -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>History</h2>
+        <button id="deleteSelected" class="danger small" title="Delete selected">Delete</button>
+      </div>
+      <ul id="historyList" class="history-list"></ul>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <div class="workspace">
+        <!-- Left pane: upload + settings -->
+        <section class="pane left">
+          <div class="upload-card">
+            <h3>Upload</h3>
+            <div id="dropzone" class="dropzone">
+              <input id="fileInput" type="file" accept="image/*" />
+              <p>Drag & drop an image here, or click to select</p>
+            </div>
+            <div id="uploadPreview" class="preview hidden">
+              <h4>Preview</h4>
+              <img id="previewImg" alt="Uploaded preview" />
+            </div>
+          </div>
+
+          <details class="settings-card" open>
+            <summary>Prompts</summary>
+            <label>
+              Positive prompt
+              <textarea id="positivePrompt" rows="2" placeholder="Describe desired restoration details"></textarea>
+            </label>
+            <label>
+              Negative prompt
+              <textarea id="negativePrompt" rows="2" placeholder="Things to avoid"></textarea>
+            </label>
+          </details>
+
+          <details class="settings-card">
+            <summary>Advanced settings</summary>
+            <div class="grid">
+              <label>
+                Guidance scale
+                <input id="guidanceScale" type="number" step="0.1" min="0" max="50" value="7.5" />
+              </label>
+              <label>
+                Strength
+                <input id="strength" type="number" step="0.05" min="0" max="1" value="0.8" />
+              </label>
+              <label>
+                Steps
+                <input id="steps" type="number" min="1" max="200" value="30" />
+              </label>
+              <label>
+                Seed
+                <input id="seed" type="number" placeholder="optional" />
+              </label>
+            </div>
+          </details>
+
+          <div class="actions">
+            <button id="runBtn" class="primary" disabled>Run</button>
+            <span id="statusText" class="status"></span>
+          </div>
+        </section>
+
+        <!-- Right pane: result -->
+        <section class="pane right">
+          <div class="result-card">
+            <h3>Result</h3>
+            <div id="resultState" class="result-state">
+              <div id="idleState" class="state">No job running.</div>
+              <div id="runningState" class="state hidden">Running... Please wait.</div>
+              <div id="errorState" class="state error hidden"></div>
+            </div>
+            <div id="resultPreview" class="preview hidden">
+              <img id="resultImg" alt="Result preview" />
+              <div class="result-actions">
+                <a id="downloadLink" class="button" href="#" download>Download</a>
+                <button id="rerunBtn" class="secondary" disabled>Rerun</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
