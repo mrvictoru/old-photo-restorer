@@ -1,0 +1,17 @@
+version: "0.1"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8964:8964"
+    volumes:
+      - .:/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
