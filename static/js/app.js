@@ -7,7 +7,6 @@ const uploadPreview = document.getElementById("uploadPreview");
 const previewImg = document.getElementById("previewImg");
 
 const positivePrompt = document.getElementById("positivePrompt");
-const negativePrompt = document.getElementById("negativePrompt");
 const guidanceScale = document.getElementById("guidanceScale");
 const strength = document.getElementById("strength");
 const steps = document.getElementById("steps");
@@ -143,7 +142,6 @@ function clearSelectionUI() {
 function populateSettingsFromItem(item) {
   if (item.prompts) {
     positivePrompt.value = item.prompts.positive || "";
-    negativePrompt.value = item.prompts.negative || "";
   }
   if (item.advanced) {
     guidanceScale.value = item.advanced.guidance_scale ?? 7.5;
@@ -167,8 +165,10 @@ function updateStatusUI(item) {
     runningState.classList.add("hidden");
     errorState.classList.add("hidden");
     if (item.result_url) {
-      resultImg.src = item.result_url;
-      downloadLink.href = item.result_url;
+      // Add cache-busting to result image URL
+      const cacheBustedUrl = item.result_url + "?t=" + Date.now();
+      resultImg.src = cacheBustedUrl;
+      downloadLink.href = item.result_url; // Keep original URL for download
       resultPreview.classList.remove("hidden");
     }
     runBtn.disabled = false;
@@ -266,7 +266,6 @@ async function runCurrent() {
     id: state.selectedId,
     prompts: {
       positive: positivePrompt.value || "",
-      negative: negativePrompt.value || "",
     },
     advanced: {
       guidance_scale: parseFloat(guidanceScale.value) || 7.5,
