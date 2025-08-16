@@ -1,8 +1,1 @@
-fastapi
-uvicorn[standard]
-pillow
-torch
-diffusers
-transformers
-numpy
-safetensors
+FastAPI, uvicorn, jinja2, pillow, aiofiles, python-multipart
