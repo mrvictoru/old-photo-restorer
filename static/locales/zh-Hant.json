@@ -1,0 +1,10 @@
+{
+  "title": "老照片修復工具",
+  "lang_label": "語言：",
+  "prompt_label": "描述照片",
+  "run_button": "修復照片",
+  "status_idle": "狀態：空閒",
+  "status_running": "正在修復中…",
+  "status_done": "修復完成！",
+  "download": "下載"
+}

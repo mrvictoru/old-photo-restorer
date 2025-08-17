@@ -1,0 +1,10 @@
+{
+  "title": "Old Photo Restorer",
+  "lang_label": "Language:",
+  "prompt_label": "Describe the photo",
+  "run_button": "Restore Photo",
+  "status_idle": "Status: idle",
+  "status_running": "Restoration in progress...",
+  "status_done": "Restoration complete!",
+  "download": "Download"
+}

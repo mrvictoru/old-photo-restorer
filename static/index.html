@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title data-i18n="title">Old Photo Restorer</title>
+  <link rel="stylesheet" href="static/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1 data-i18n="title">Old Photo Restorer</h1>
+    <div id="lang-container">
+      <label for="langSwitch" data-i18n="lang_label">Language:</label>
+      <select id="langSwitch">
+        <option value="en">English</option>
+        <option value="zh-Hant">繁體中文</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <form id="restoreForm">
+      <label for="promptInput" data-i18n="prompt_label">Describe the photo</label>
+      <input id="promptInput" type="text" />
+      <button id="runBtn" data-i18n="run_button">Restore Photo</button>
+    </form>
+
+    <section id="statusSection">
+      <p id="statusText" data-i18n="status_idle">Status: idle</p>
+      <div id="runningState" class="hidden">
+        <p data-i18n="status_running">Restoration in progress...</p>
+      </div>
+      <div id="doneState" class="hidden">
+        <p data-i18n="status_done">Restoration complete!</p>
+        <div id="resultPreview" class="hidden">
+          <img id="resultImg" src="" alt="Result" />
+          <a id="downloadLink" download data-i18n="download">Download</a>
+        </div>
+      </div>
+      <div id="errorState" class="hidden"></div>
+    </section>
+  </main>
+
+  <script src="static/js/i18n.js"></script>
+  <script src="static/js/app.js"></script>
+</body>
+</html>
