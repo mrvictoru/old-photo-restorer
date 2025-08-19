@@ -24,8 +24,10 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     # Instantiate once per process at startup
+    access_token = os.getenv("HUGGINGFACE_HUB_TOKEN") or os.getenv("HF_TOKEN")
     app.state.restorer = KontextRestorer(
-        model_id=os.getenv("KONTEXT_MODEL_ID", "black-forest-labs/FLUX.1-Kontext-dev")
+        model_id=os.getenv("KONTEXT_MODEL_ID", "black-forest-labs/FLUX.1-Kontext-dev"),
+        access_token=access_token,
     )
 
 @app.post("/restore")

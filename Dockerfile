@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn8-runtime
+FROM pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime
 
 WORKDIR /app
 
@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 8964
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8964"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8964"]

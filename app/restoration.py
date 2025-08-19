@@ -46,10 +46,12 @@ def _simple_upscale(img: Image.Image, factor: float = 2.0) -> Image.Image:
 class KontextRestorer:
     def __init__(self,
         model_id: str = "black-forest-labs/FLUX.1-Kontext-dev",
+        access_token: str = None,
         device: Optional[str] = None,
         torch_dtype: Optional[torch.dtype] = None,
     ):  
         self.model_id = model_id
+        self.access_token = access_token
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         if torch_dtype is None:
             if self.device == "cuda":
@@ -66,6 +68,7 @@ class KontextRestorer:
             self.model_id,
             torch_dtype=self.torch_dtype,
             use_safetensors=True,
+            token=self.access_token
         )
         self.pipe.to(self.device)
         self.pipe.set_progress_bar_config(disable=True)
@@ -199,11 +202,13 @@ class KontextRestorer:
         self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
             self._upscaler_model_ids["controlnet"],
             torch_dtype=dtype,
+            token=self.access_token,
         )
         self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
             self._upscaler_model_ids["base"],
             controlnet=self._upscaler_controlnet,
             torch_dtype=dtype,
+            token=self.access_token,
         )
         self._upscaler_pipe.to(self.device)
         self._upscaler_pipe.set_progress_bar_config(disable=True)
