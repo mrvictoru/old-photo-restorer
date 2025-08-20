@@ -364,3 +364,6 @@ async def delete_history(payload: DeleteRequest):
                         pass
     store.delete_many(ids)
     return {"deleted": ids}
+
+# If RESTORE_API_URL is not set, the container entrypoint/run.sh will set it to the local API (http://127.0.0.1:8000).
+# call_model_restore already uses RESTORE_API_URL to call the API when set.

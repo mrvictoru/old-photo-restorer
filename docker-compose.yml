@@ -1,18 +1,34 @@
 version: "0.1"
 
 services:
-  app:
-    build: .
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "8964:8964"
-    volumes:
-      - .:/app
+      - "8000:8000"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN}
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    command: uvicorn app.server:app --host 0.0.0.0 --port 8964
+    ports:
+      - "8964:8964"
     environment:
+      - RESTORE_API_URL=http://api:8000
       - NVIDIA_VISIBLE_DEVICES=all
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN}
+    depends_on:
+      - api
     restart: unless-stopped

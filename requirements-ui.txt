@@ -5,6 +5,3 @@ pillow
 aiofiles
 python-multipart
 requests
-numpy
-diffusers
-accelerate
