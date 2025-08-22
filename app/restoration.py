@@ -63,15 +63,76 @@ class KontextRestorer:
                 torch_dtype = torch.float32
         self.torch_dtype = torch_dtype
 
-        # Load model
-        self.pipe = DiffusionPipeline.from_pretrained(
-            self.model_id,
-            torch_dtype=self.torch_dtype,
-            use_safetensors=True,
-            token=self.access_token
-        )
-        self.pipe.to(self.device)
-        self.pipe.set_progress_bar_config(disable=True)
+        # Load model (support 4-bit bitsandbytes NF4 quantization)
+        quant = os.getenv("MODEL_QUANT", "4bit")  # options: 4bit | 8bit | fp16 | bf16
+
+        # Choose device_map strategy: prefer 'cuda' for single-GPU to place weights directly on GPU
+        device_map = "cuda" if self.device and str(self.device).startswith("cuda") else None
+
+        try:
+            if quant == "4bit":
+                # requires bitsandbytes and a compatible CUDA / bitsandbytes wheel
+                self.pipe = DiffusionPipeline.from_pretrained(
+                    self.model_id,
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                    device_map=device_map or "auto",
+                    use_safetensors=True,
+                    token=self.access_token,
+                    low_cpu_mem_usage=True,
+                )
+            elif quant == "8bit":
+                # requires bitsandbytes
+                self.pipe = DiffusionPipeline.from_pretrained(
+                    self.model_id,
+                    load_in_8bit=True,
+                    device_map=device_map or "auto",
+                    use_safetensors=True,
+                    token=self.access_token,
+                    low_cpu_mem_usage=True,
+                )
+            else:
+                # default: float16/bfloat16 as selected above
+                load_kwargs = dict(
+                    torch_dtype=self.torch_dtype,
+                    low_cpu_mem_usage=True,
+                    use_safetensors=True,
+                    token=self.access_token,
+                )
+                if device_map:
+                    load_kwargs["device_map"] = device_map
+                self.pipe = DiffusionPipeline.from_pretrained(self.model_id, **load_kwargs)
+
+            # If device_map placed modules already, .to may be a no-op; only call .to when necessary
+            try:
+                if device_map is None and getattr(self.pipe, "device", None) is None:
+                    self.pipe.to(self.device)
+            except Exception:
+                pass
+
+            self.pipe.set_progress_bar_config(disable=True)
+        except Exception as e:
+            # Fallback to safe fp16 CPU/GPU load if quantized load fails
+            try:
+                load_kwargs = dict(
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    low_cpu_mem_usage=True,
+                    use_safetensors=True,
+                    token=self.access_token,
+                )
+                if device_map:
+                    load_kwargs["device_map"] = device_map
+                self.pipe = DiffusionPipeline.from_pretrained(self.model_id, **load_kwargs)
+                try:
+                    if device_map is None and getattr(self.pipe, "device", None) is None:
+                        self.pipe.to(self.device)
+                except Exception:
+                    pass
+                self.pipe.set_progress_bar_config(disable=True)
+            except Exception:
+                raise
 
         # lazy-loaded upscaler state (Flux controlnet + pipeline)
         self._upscaler_controlnet = None
@@ -189,7 +250,11 @@ class KontextRestorer:
         return out_img
 
     def _load_upscaler(self):
-        """Lazy-load the Flux controlnet upscaler pipeline. May raise on load failure."""
+        """Lazy-load the Flux controlnet upscaler pipeline. May raise on load failure.
+
+        Supports quantized loads (4-bit NF4 or 8-bit via bitsandbytes) when
+        MODEL_QUANT is set. Falls back to standard (non-quantized) load on error.
+        """
         if self._upscaler_pipe is not None:
             return
 
@@ -198,20 +263,91 @@ class KontextRestorer:
         if self.device == "cpu":
             dtype = torch.float32
 
-        # Load controlnet and Flux pipeline (may be large; done lazily)
-        self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
-            self._upscaler_model_ids["controlnet"],
-            torch_dtype=dtype,
-            token=self.access_token,
-        )
-        self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
-            self._upscaler_model_ids["base"],
-            controlnet=self._upscaler_controlnet,
-            torch_dtype=dtype,
-            token=self.access_token,
-        )
-        self._upscaler_pipe.to(self.device)
-        self._upscaler_pipe.set_progress_bar_config(disable=True)
+        quant = os.getenv("MODEL_QUANT", "4bit")
+
+        try:
+            if quant == "4bit":
+                # 4-bit NF4 using bitsandbytes
+                self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
+                    self._upscaler_model_ids["controlnet"],
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                    device_map="auto",
+                    torch_dtype=dtype,
+                    token=self.access_token,
+                )
+                self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
+                    self._upscaler_model_ids["base"],
+                    controlnet=self._upscaler_controlnet,
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                    device_map="auto",
+                    torch_dtype=dtype,
+                    token=self.access_token,
+                )
+            elif quant == "8bit":
+                # 8-bit using bitsandbytes
+                self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
+                    self._upscaler_model_ids["controlnet"],
+                    load_in_8bit=True,
+                    device_map="auto",
+                    torch_dtype=dtype,
+                    token=self.access_token,
+                )
+                self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
+                    self._upscaler_model_ids["base"],
+                    controlnet=self._upscaler_controlnet,
+                    load_in_8bit=True,
+                    device_map="auto",
+                    torch_dtype=dtype,
+                    token=self.access_token,
+                )
+            else:
+                # Standard loading (no quantization)
+                self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
+                    self._upscaler_model_ids["controlnet"],
+                    torch_dtype=dtype,
+                    token=self.access_token,
+                )
+                self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
+                    self._upscaler_model_ids["base"],
+                    controlnet=self._upscaler_controlnet,
+                    torch_dtype=dtype,
+                    token=self.access_token,
+                )
+
+            # If device_map="auto" placed modules already, .to may be a no-op; wrap in try
+            try:
+                if getattr(self._upscaler_pipe, "device", None) is None:
+                    self._upscaler_pipe.to(self.device)
+            except Exception:
+                pass
+
+            self._upscaler_pipe.set_progress_bar_config(disable=True)
+
+        except Exception:
+            # On any error, fall back to the simple non-quantized loading (best-effort)
+            self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
+                self._upscaler_model_ids["controlnet"],
+                torch_dtype=dtype,
+                token=self.access_token,
+            )
+            self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
+                self._upscaler_model_ids["base"],
+                controlnet=self._upscaler_controlnet,
+                torch_dtype=dtype,
+                token=self.access_token,
+            )
+            try:
+                if getattr(self._upscaler_pipe, "device", None) is None:
+                    self._upscaler_pipe.to(self.device)
+            except Exception:
+                pass
+            self._upscaler_pipe.set_progress_bar_config(disable=True)
 
     def _flux_upscale(
         self,

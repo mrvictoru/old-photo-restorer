@@ -8,3 +8,7 @@ requests
 numpy
 diffusers
 accelerate
+transformers
+sentencepiece
+protobuf
+bitsandbytes
