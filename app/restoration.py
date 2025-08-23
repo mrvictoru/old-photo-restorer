@@ -134,13 +134,7 @@ class KontextRestorer:
             except Exception:
                 raise
 
-        # lazy-loaded upscaler state (Flux controlnet + pipeline)
-        self._upscaler_controlnet = None
-        self._upscaler_pipe = None
-        self._upscaler_model_ids = {
-            "controlnet": "jasperai/Flux.1-dev-Controlnet-Upscaler",
-            "base": "black-forest-labs/FLUX.1-dev",
-        }
+    # Upscaler removed; see upscaling class/pipeline for future use
 
     def build_prompt(self, user_prompt: str, needs_colorization: bool) -> Tuple[str, str]:
         base_prompt = (
@@ -202,7 +196,6 @@ class KontextRestorer:
         guidance_scale: float = 3.5,
         strength: float = 0.35,
         num_inference_steps: int = 28,
-        upscale_factor: float = 2.0,
         max_input_side: int = 1024,
         seed: Optional[int] = None,
     ) -> Image.Image:
@@ -229,160 +222,8 @@ class KontextRestorer:
             generator=generator,
         )
         out_img: Image.Image = result.images[0]
-
-        # Upscale using Flux upscaler with fallback to simple Lanczos upscaling
-        try:
-            up_img = self._flux_upscale(
-                out_img,
-                factor=upscale_factor,
-                guidance_scale=guidance_scale,
-                num_inference_steps=num_inference_steps,
-                controlnet_conditioning_scale=0.6,
-            )
-            # If flux returned something unexpected, fall back.
-            if not isinstance(up_img, Image.Image):
-                raise RuntimeError("Flux upscaler returned non-image result")
-            out_img = up_img
-        except Exception:
-            # On any error, fall back to the simple Lanczos upscaler
-            out_img = _simple_upscale(out_img, upscale_factor)
- 
         return out_img
 
-    def _load_upscaler(self):
-        """Lazy-load the Flux controlnet upscaler pipeline. May raise on load failure.
+    # Upscaler methods removed; see upscaling class/pipeline for future use
 
-        Supports quantized loads (4-bit NF4 or 8-bit via bitsandbytes) when
-        MODEL_QUANT is set. Falls back to standard (non-quantized) load on error.
-        """
-        if self._upscaler_pipe is not None:
-            return
-
-        # Choose dtype for upscaler: prefer configured torch_dtype but force float32 on CPU.
-        dtype = self.torch_dtype
-        if self.device == "cpu":
-            dtype = torch.float32
-
-        quant = os.getenv("MODEL_QUANT", "4bit")
-
-        try:
-            if quant == "4bit":
-                # 4-bit NF4 using bitsandbytes
-                self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
-                    self._upscaler_model_ids["controlnet"],
-                    load_in_4bit=True,
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4",
-                    device_map="auto",
-                    torch_dtype=dtype,
-                    token=self.access_token,
-                )
-                self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
-                    self._upscaler_model_ids["base"],
-                    controlnet=self._upscaler_controlnet,
-                    load_in_4bit=True,
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4",
-                    device_map="auto",
-                    torch_dtype=dtype,
-                    token=self.access_token,
-                )
-            elif quant == "8bit":
-                # 8-bit using bitsandbytes
-                self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
-                    self._upscaler_model_ids["controlnet"],
-                    load_in_8bit=True,
-                    device_map="auto",
-                    torch_dtype=dtype,
-                    token=self.access_token,
-                )
-                self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
-                    self._upscaler_model_ids["base"],
-                    controlnet=self._upscaler_controlnet,
-                    load_in_8bit=True,
-                    device_map="auto",
-                    torch_dtype=dtype,
-                    token=self.access_token,
-                )
-            else:
-                # Standard loading (no quantization)
-                self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
-                    self._upscaler_model_ids["controlnet"],
-                    torch_dtype=dtype,
-                    token=self.access_token,
-                )
-                self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
-                    self._upscaler_model_ids["base"],
-                    controlnet=self._upscaler_controlnet,
-                    torch_dtype=dtype,
-                    token=self.access_token,
-                )
-
-            # If device_map="auto" placed modules already, .to may be a no-op; wrap in try
-            try:
-                if getattr(self._upscaler_pipe, "device", None) is None:
-                    self._upscaler_pipe.to(self.device)
-            except Exception:
-                pass
-
-            self._upscaler_pipe.set_progress_bar_config(disable=True)
-
-        except Exception:
-            # On any error, fall back to the simple non-quantized loading (best-effort)
-            self._upscaler_controlnet = FluxControlNetModel.from_pretrained(
-                self._upscaler_model_ids["controlnet"],
-                torch_dtype=dtype,
-                token=self.access_token,
-            )
-            self._upscaler_pipe = FluxControlNetPipeline.from_pretrained(
-                self._upscaler_model_ids["base"],
-                controlnet=self._upscaler_controlnet,
-                torch_dtype=dtype,
-                token=self.access_token,
-            )
-            try:
-                if getattr(self._upscaler_pipe, "device", None) is None:
-                    self._upscaler_pipe.to(self.device)
-            except Exception:
-                pass
-            self._upscaler_pipe.set_progress_bar_config(disable=True)
-
-    def _flux_upscale(
-        self,
-        image: Image.Image,
-        factor: float = 2.0,
-        guidance_scale: float = 3.5,
-        num_inference_steps: int = 28,
-        controlnet_conditioning_scale: float = 0.6,
-    ) -> Image.Image:
-        """Upscale using the Flux ControlNet upscaler. Falls back to Lanczos _simple_upscale on error."""
-        if factor <= 1.0:
-            return image
-
-        try:
-            self._load_upscaler()
-        except Exception:
-            # If loading fails, fallback to simple upscaler
-            return _simple_upscale(image, factor)
-
-        # compute target size and prepare control image (Flux expects the upscaled control image)
-        w, h = image.size
-        new_w, new_h = int(round(w * factor)), int(round(h * factor))
-        control_image = image.resize((new_w, new_h), Image.LANCZOS)
-
-        try:
-            result = self._upscaler_pipe(
-                prompt="",
-                control_image=control_image,
-                controlnet_conditioning_scale=controlnet_conditioning_scale,
-                num_inference_steps=num_inference_steps,
-                guidance_scale=guidance_scale,
-                height=new_h,
-                width=new_w,
-            )
-            return result.images[0]
-        except Exception:
-            # If inference fails for any reason, fall back to simple resize.
-            return _simple_upscale(image, factor)
+    # Upscaler methods removed; see upscaling class/pipeline for future use
